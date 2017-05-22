@@ -62,9 +62,8 @@ def color_histogram(img, nbins=32, bins_range=(0, 256)):
     return hist_features
 
 def extract_features(img, spatial_size = (32, 32), hist_bins = 32, bins_range = (0, 256)):
-    image = mpimg.imread(img)
-    spatial_features = bin_spatial(image, spatial_size)
-    histogram_features = color_histogram(image, hist_bins, bins_range)
+    spatial_features = bin_spatial(img, spatial_size)
+    histogram_features = color_histogram(img, hist_bins, bins_range)
     features = np.concatenate((spatial_features, histogram_features))
     return features
 
@@ -73,11 +72,13 @@ hist_bins = 32
 bins_range = (0, 256)
 
 for car in cars:
-    features = extract_features(car, spatial_size, hist_bins, bins_range)
+    img = mpimg.imread(car)
+    features = extract_features(img, spatial_size, hist_bins, bins_range)
     car_features.append(features)
 
 for not_car in not_cars:
-    features = extract_features(not_car, spatial_size, hist_bins, bins_range)
+    img = mpimg.imread(not_car)
+    features = extract_features(img, spatial_size, hist_bins, bins_range)
     not_car_features.append(features)
 
 ###################################################################################################
@@ -110,3 +111,100 @@ print(round(t2-t1, 2), ' seconds to train SVC...')
 
 print('Train accuracy of SVC = ', round(svc.score(X_train, y_train), 4))
 print('Test accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+
+###################################################################################################
+## Sliding windows
+###################################################################################################
+
+def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None], 
+                    xy_window=(64, 64), xy_overlap=(0.5, 0.5)):
+
+    if x_start_stop[0] == None:
+        x_start_stop[0] = 0
+    if x_start_stop[1] == None:
+        x_start_stop[1] = img.shape[1]
+    if y_start_stop[0] == None:
+        y_start_stop[0] = 0
+    if y_start_stop[1] == None:
+        y_start_stop[1] = img.shape[0]
+    # Compute the span of the region to be searched    
+    xspan = x_start_stop[1] - x_start_stop[0]
+    yspan = y_start_stop[1] - y_start_stop[0]
+    # Compute the number of pixels per step in x/y
+    nx_pix_per_step = np.int(xy_window[0]*(1 - xy_overlap[0]))
+    ny_pix_per_step = np.int(xy_window[1]*(1 - xy_overlap[1]))
+    # Compute the number of windows in x/y
+    nx_buffer = np.int(xy_window[0]*(xy_overlap[0]))
+    ny_buffer = np.int(xy_window[1]*(xy_overlap[1]))
+    nx_windows = np.int((xspan-nx_buffer)/nx_pix_per_step) 
+    ny_windows = np.int((yspan-ny_buffer)/ny_pix_per_step) 
+    # Initialize a list to append window positions to
+    window_list = []
+    # Loop through finding x and y window positions
+    # Note: you could vectorize this step, but in practice
+    # you'll be considering windows one by one with your
+    # classifier, so looping makes sense
+    for ys in range(ny_windows):
+        for xs in range(nx_windows):
+            # Calculate window position
+            startx = xs*nx_pix_per_step + x_start_stop[0]
+            endx = startx + xy_window[0]
+            starty = ys*ny_pix_per_step + y_start_stop[0]
+            endy = starty + xy_window[1]
+            
+            # Append window position to list
+            window_list.append(((startx, starty), (endx, endy)))
+    # Return the list of windows
+    return window_list
+
+def draw_windows(img, windows, color, thickness):
+    image = np.copy(img)
+    for window in windows:
+        cv2.rectangle(image, window[0], window[1], color, thickness)
+    return image
+
+###################################################################################################
+## Pipeline for single image
+###################################################################################################
+
+def pipeline(img, scaler, classifier):
+    
+    x_start_stop = [None, None]
+    y_start_stop = [None, None]
+    xy_window = (64, 64)
+    xy_overlap = (0.5, 0.5)
+
+    windows = slide_window(img, x_start_stop, y_start_stop, xy_window, xy_overlap)
+
+    detected_windows = []
+
+    for window in windows:
+
+        window_img = test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
+
+        spatial_size = (32, 32)
+        hist_bins = 32
+        bins_range = (0, 256)
+
+        features = extract_features(window_img, spatial_size, hist_bins, bins_range)
+        features = scaler.transform(np.array(features).reshape(1, -1))
+        prediction = classifier.predict(features)
+
+        if prediction == 1:
+            detected_windows.append(window)
+
+    windows_img = np.copy(img)
+    windows_img = draw_windows(windows_img, detected_windows, color = (0, 0, 255), thickness = 8)
+
+    return windows_img
+
+###################################################################################################
+## Process test images
+###################################################################################################
+
+test_images = glob.glob('test_images/*.jpg')
+for test_image in test_images:
+    image = mpimg.imread(test_image)
+    result = pipeline(image, X_scaler, svc)
+    plt.imshow(result)
+    plt.show()
