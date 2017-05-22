@@ -58,8 +58,23 @@ def color_histogram(img, nbins=32, bins_range=(0, 256)):
     channel1_hist = np.histogram(img[:,:,0], bins=nbins, range=bins_range)
     channel2_hist = np.histogram(img[:,:,1], bins=nbins, range=bins_range)
     channel3_hist = np.histogram(img[:,:,2], bins=nbins, range=bins_range)
-    hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
-    return hist_features
+    features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
+    return features
+
+def extract_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
+    hog_features = None
+
+    if hog_channel == 'ALL':
+        hog_features = []
+        for channel in range(img.shape[2]):
+            hog_features = hog(img[:,:,channel], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell), cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, visualise=False, feature_vector=True)
+            hog_features = np.ravel(hog_features)        
+    else:
+        hog_features = hog(img[:,:,hog_channel], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell), cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, visualise=False, feature_vector=True)
+
+    feature = hog_features
+
+    return features
 
 def extract_features(img, spatial_size = (32, 32), hist_bins = 32, bins_range = (0, 256)):
     spatial_features = bin_spatial(img, spatial_size)
