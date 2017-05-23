@@ -88,16 +88,23 @@ def extract_hog_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_ch
 
     return features
 
-def extract_features(img,
+def extract_features(img, color_space = 'RGB',
                     spatial_size = (32, 32),
                     hist_bins = 32, bins_range = (0, 256),
                     orient = 9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
-    spatial_features = bin_spatial(img, spatial_size)
+
+    if color_space == 'YUV':
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+    elif color_space == 'HSV':
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+
+    #spatial_features = bin_spatial(img, spatial_size)
     histogram_features = color_histogram(img, hist_bins, bins_range)
     hog_features = extract_hog_features(img, orient, pix_per_cell, cell_per_block, hog_channel)
-    features = np.concatenate((spatial_features, histogram_features, hog_features))
+    features = np.concatenate((histogram_features, hog_features))
     return features
 
+color_space = 'YUV'
 spatial_size = (32, 32)
 hist_bins = 32
 bins_range = (0, 256)
@@ -108,12 +115,12 @@ hog_channel = 0
 
 for car in cars:
     img = mpimg.imread(car)
-    features = extract_features(img, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
+    features = extract_features(img, color_space, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
     car_features.append(features)
 
 for not_car in not_cars:
     img = mpimg.imread(not_car)
-    features = extract_features(img, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
+    features = extract_features(img, color_space, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
     not_car_features.append(features)
 
 ###################################################################################################
@@ -206,10 +213,13 @@ def pipeline(img, scaler, classifier):
     
     x_start_stop = [None, None]
     y_start_stop = [400, 656]
-    xy_window = (64, 64)
-    xy_overlap = (0.5, 0.5)
+    scales = [(48, 48), (64, 64), (96, 96), (128, 128), (192, 192)]
+    overlaps = [(0.25, 0.25), (0.25, 0.25), (0.5, 0.5), (0.75, 0.75), (0.75, 0.75)]
 
-    windows = slide_window(img, x_start_stop, y_start_stop, xy_window, xy_overlap)
+    windows = []
+    for scale, overlap in zip(scales, overlaps):
+        scaled_windows = slide_window(img, x_start_stop, y_start_stop, scale, overlap)
+        windows.extend(scaled_windows)
 
     detected_windows = []
 
@@ -217,7 +227,7 @@ def pipeline(img, scaler, classifier):
 
         window_img = test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
 
-        features = extract_features(window_img, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
+        features = extract_features(window_img, color_space, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
         features = scaler.transform(np.array(features).reshape(1, -1))
         prediction = classifier.predict(features)
 
