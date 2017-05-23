@@ -61,24 +61,59 @@ def color_histogram(img, nbins=32, bins_range=(0, 256)):
     hist_features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
     return hist_features
 
-def extract_features(img, spatial_size = (32, 32), hist_bins = 32, bins_range = (0, 256)):
+def extract_hog_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
+
+    features = None
+
+    if hog_channel == 'ALL':
+
+        features = []
+
+        for channel in range(img.shape[2]):
+            features.append(hog(img[:,:,channel],
+                                orientations=orient,
+                                pixels_per_cell=(pix_per_cell, pix_per_cell),
+                                cells_per_block=(cell_per_block, cell_per_block),
+                                transform_sqrt=True,
+                                visualise=False, feature_vector=True))
+
+        features = np.ravel(hog_features)
+    else:
+        features = hog(img[:,:,hog_channel],
+                                orientations=orient,
+                                pixels_per_cell=(pix_per_cell, pix_per_cell),
+                                cells_per_block=(cell_per_block, cell_per_block),
+                                transform_sqrt=True,
+                                visualise=False, feature_vector=True)
+
+    return features
+
+def extract_features(img,
+                    spatial_size = (32, 32),
+                    hist_bins = 32, bins_range = (0, 256),
+                    orient = 9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
     spatial_features = bin_spatial(img, spatial_size)
     histogram_features = color_histogram(img, hist_bins, bins_range)
-    features = np.concatenate((spatial_features, histogram_features))
+    hog_features = extract_hog_features(img, orient, pix_per_cell, cell_per_block, hog_channel)
+    features = np.concatenate((spatial_features, histogram_features, hog_features))
     return features
 
 spatial_size = (32, 32)
 hist_bins = 32
 bins_range = (0, 256)
+orient = 9
+pix_per_cell = 8
+cell_per_block = 2
+hog_channel = 0
 
 for car in cars:
     img = mpimg.imread(car)
-    features = extract_features(img, spatial_size, hist_bins, bins_range)
+    features = extract_features(img, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
     car_features.append(features)
 
 for not_car in not_cars:
     img = mpimg.imread(not_car)
-    features = extract_features(img, spatial_size, hist_bins, bins_range)
+    features = extract_features(img, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
     not_car_features.append(features)
 
 ###################################################################################################
@@ -170,7 +205,7 @@ def draw_windows(img, windows, color, thickness):
 def pipeline(img, scaler, classifier):
     
     x_start_stop = [None, None]
-    y_start_stop = [None, None]
+    y_start_stop = [400, 656]
     xy_window = (64, 64)
     xy_overlap = (0.5, 0.5)
 
@@ -182,11 +217,7 @@ def pipeline(img, scaler, classifier):
 
         window_img = test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
 
-        spatial_size = (32, 32)
-        hist_bins = 32
-        bins_range = (0, 256)
-
-        features = extract_features(window_img, spatial_size, hist_bins, bins_range)
+        features = extract_features(window_img, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
         features = scaler.transform(np.array(features).reshape(1, -1))
         prediction = classifier.predict(features)
 
