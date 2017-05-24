@@ -183,9 +183,6 @@ def slide_window(img, x_start_stop=[None, None], y_start_stop=[None, None],
     # Initialize a list to append window positions to
     window_list = []
     # Loop through finding x and y window positions
-    # Note: you could vectorize this step, but in practice
-    # you'll be considering windows one by one with your
-    # classifier, so looping makes sense
     for ys in range(ny_windows):
         for xs in range(nx_windows):
             # Calculate window position
@@ -206,10 +203,27 @@ def draw_windows(img, windows, color, thickness):
     return image
 
 ###################################################################################################
+## Heatmap
+###################################################################################################
+
+def add_heat(heatmap, windows):
+    for window in windows:
+        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += 1
+    return heatmap
+
+def decay_heat(heatmap):
+    heatmap -= 1
+    return heatmap
+
+def threshold_heatmap(heatmap, threshold):
+    heatmap[heatmap <= threshold] = 0
+    return heatmap
+
+###################################################################################################
 ## Pipeline for single image
 ###################################################################################################
 
-def pipeline(img, scaler, classifier):
+def pipeline(img, scaler, classifier, heatmap):
     
     x_start_stop = [None, None]
     y_start_stop = [400, 656]
@@ -237,7 +251,11 @@ def pipeline(img, scaler, classifier):
     windows_img = np.copy(img)
     windows_img = draw_windows(windows_img, detected_windows, color = (0, 0, 255), thickness = 8)
 
-    return windows_img
+    decay_heat(heatmap)
+    add_heat(heatmap, detected_windows)
+    heatmap = np.clip(heatmap, 0, 255)
+
+    return [windows_img, heatmap]
 
 ###################################################################################################
 ## Process test images
@@ -246,6 +264,12 @@ def pipeline(img, scaler, classifier):
 test_images = glob.glob('test_images/*.jpg')
 for test_image in test_images:
     image = mpimg.imread(test_image)
-    result = pipeline(image, X_scaler, svc)
-    plt.imshow(result)
+    heatmap = np.zeros_like(image[:,:,0]).astype(np.float)
+    result = pipeline(image, X_scaler, svc, heatmap)
+    fig = plt.figure()
+    plt.subplot(121)
+    plt.imshow(result[0])
+    plt.subplot(122)
+    plt.imshow(result[1], cmap='hot')
+    fig.tight_layout()
     plt.show()
