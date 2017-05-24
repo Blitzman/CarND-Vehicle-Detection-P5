@@ -81,7 +81,7 @@ def extract_hog_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_ch
                                 transform_sqrt=True,
                                 visualise=False, feature_vector=True))
 
-        features = np.ravel(hog_features)
+        features = np.ravel(features)
     else:
         features = hog(img[:,:,hog_channel],
                                 orientations=orient,
@@ -92,39 +92,50 @@ def extract_hog_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_ch
 
     return features
 
-def extract_features(img, color_space = 'RGB',
-                    spatial_size = (32, 32),
-                    hist_bins = 32, bins_range = (0, 256),
-                    orient = 9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
+def extract_features(img,
+                    enable_spatial_features = False, spatial_size = (32, 32),
+                    enable_histogram_features = False, hist_bins = 32, bins_range = (0, 256),
+                    enable_hog_features = True, orient = 9, pix_per_cell=8, cell_per_block=5, hog_channel=0):
 
-    if color_space == 'YUV':
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
-    elif color_space == 'HSV':
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    features = []
 
-    #spatial_features = bin_spatial(img, spatial_size)
-    histogram_features = color_histogram(img, hist_bins, bins_range)
-    hog_features = extract_hog_features(img, orient, pix_per_cell, cell_per_block, hog_channel)
-    features = np.concatenate((histogram_features, hog_features))
+    if enable_spatial_features == True:
+        spatial_img = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+        spatial_features = bin_spatial(spatial_img, spatial_size)
+        features.append(spatial_features)
+
+    if enable_histogram_features == True:
+        histogram_img = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+        histogram_features = color_histogram(histogram_img, hist_bins, bins_range)
+        features.append(histogram_features)
+
+    if enable_hog_features == True:
+        hog_img = cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
+        hog_features = extract_hog_features(hog_img, orient, pix_per_cell, cell_per_block, hog_channel)
+        features.append(hog_features)
+
+    features = np.concatenate(features)
     return features
 
-color_space = 'YUV'
-spatial_size = (32, 32)
-hist_bins = 32
+enable_spatial_features = False
+spatial_size = (16, 16)
+enable_histogram_features = True
+hist_bins = 16
 bins_range = (0, 256)
-orient = 9
+enable_hog_features = True
+orient = 8
 pix_per_cell = 8
 cell_per_block = 2
 hog_channel = 0
 
 for car in cars:
-    img = mpimg.imread(car)
-    features = extract_features(img, color_space, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
+    img = cv2.imread(car)
+    features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
     car_features.append(features)
 
 for not_car in not_cars:
-    img = mpimg.imread(not_car)
-    features = extract_features(img, color_space, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
+    img = cv2.imread(not_car)
+    features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
     not_car_features.append(features)
 
 ###################################################################################################
@@ -241,13 +252,13 @@ classifier = svc
 
 def pipeline(img):
     
-    x_start_stop = [None, None]
-    y_start_stop = [400, 656]
+    x_start_stops = [(0, 1280), (0, 1280), (0, 1280), (0, 1280), (0, 1280)]
+    y_start_stops = [(400, 656), (400, 656), (400, 656), (400, 656), (400, 656)]
     scales = [(48, 48), (64, 64), (96, 96), (128, 128), (192, 192)]
-    overlaps = [(0.25, 0.25), (0.25, 0.25), (0.5, 0.5), (0.75, 0.75), (0.75, 0.75)]
+    overlaps = [(0.25, 0.25), (0.25, 0.25), (0.5, 0.5), (0.85, 0.85), (0.85, 0.85)]
 
     windows = []
-    for scale, overlap in zip(scales, overlaps):
+    for scale, overlap, x_start_stop, y_start_stop in zip(scales, overlaps, x_start_stops, y_start_stops):
         scaled_windows = slide_window(img, x_start_stop, y_start_stop, scale, overlap)
         windows.extend(scaled_windows)
 
@@ -255,9 +266,9 @@ def pipeline(img):
 
     for window in windows:
 
-        window_img = test_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
+        window_img = cv2.resize(img[window[0][1]:window[1][1], window[0][0]:window[1][0]], (64, 64))
 
-        features = extract_features(window_img, color_space, spatial_size, hist_bins, bins_range, orient, pix_per_cell, cell_per_block, hog_channel)
+        features = extract_features(window_img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
         features = scaler.transform(np.array(features).reshape(1, -1))
         prediction = classifier.predict(features)
 
@@ -265,16 +276,19 @@ def pipeline(img):
             detected_windows.append(window)
 
     windows_img = np.copy(img)
-    windows_img = draw_windows(windows_img, detected_windows, color = (0, 0, 255), thickness = 8)
+    windows_img = draw_windows(windows_img, windows, color = (0, 0, 255), thickness = 6)
+
+    detections_img = np.copy(img)
+    detections_img = draw_windows(detections_img, detected_windows, color = (0, 0, 255), thickness = 8)
 
     hmap = np.zeros_like(img[:,:,0])
     hmap = add_heat(hmap, detected_windows)
     hmap = threshold_heatmap(hmap, 1)
     hmap = np.clip(hmap, 0, 255)
     hmap_labels = label(hmap)
-    detections_img = draw_boxes(np.copy(img), hmap_labels)
+    refined_img = draw_boxes(np.copy(img), hmap_labels)
 
-    return [windows_img, hmap, detections_img]
+    return [windows_img, detections_img, hmap, refined_img]
 
 ###################################################################################################
 ## Process test images
@@ -285,12 +299,14 @@ for test_image in test_images:
     image = mpimg.imread(test_image)
     result = pipeline(image)
     fig = plt.figure()
-    plt.subplot(131)
+    plt.subplot(141)
     plt.imshow(result[0])
-    plt.subplot(132)
-    plt.imshow(result[1], cmap='hot')
-    plt.subplot(133)
-    plt.imshow(result[2])
+    plt.subplot(142)
+    plt.imshow(result[1])
+    plt.subplot(143)
+    plt.imshow(result[2], cmap='hot')
+    plt.subplot(144)
+    plt.imshow(result[3])
     fig.tight_layout()
     plt.show()
 
