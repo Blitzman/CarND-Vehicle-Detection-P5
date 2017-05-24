@@ -13,6 +13,10 @@ from sklearn.svm import LinearSVC
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
+from moviepy.editor import VideoFileClip
+
+from scipy.ndimage.measurements import label
+
 ###################################################################################################
 ## Load data for cars and not cars
 ###################################################################################################
@@ -219,11 +223,23 @@ def threshold_heatmap(heatmap, threshold):
     heatmap[heatmap <= threshold] = 0
     return heatmap
 
+def draw_boxes(img, labels):
+    for car in range(1, labels[1]+1):
+        nonzero = (labels[0] == car).nonzero()
+        nonzeroy = np.array(nonzero[0])
+        nonzerox = np.array(nonzero[1])
+        bbox = ((np.min(nonzerox), np.min(nonzeroy)), (np.max(nonzerox), np.max(nonzeroy)))
+        cv2.rectangle(img, bbox[0], bbox[1], (0, 0, 255), 6)
+    return img
+
 ###################################################################################################
 ## Pipeline for single image
 ###################################################################################################
 
-def pipeline(img, scaler, classifier, heatmap):
+scaler = X_scaler
+classifier = svc
+
+def pipeline(img):
     
     x_start_stop = [None, None]
     y_start_stop = [400, 656]
@@ -251,11 +267,14 @@ def pipeline(img, scaler, classifier, heatmap):
     windows_img = np.copy(img)
     windows_img = draw_windows(windows_img, detected_windows, color = (0, 0, 255), thickness = 8)
 
-    decay_heat(heatmap)
-    add_heat(heatmap, detected_windows)
-    heatmap = np.clip(heatmap, 0, 255)
+    hmap = np.zeros_like(img[:,:,0])
+    hmap = add_heat(hmap, detected_windows)
+    hmap = threshold_heatmap(hmap, 1)
+    hmap = np.clip(hmap, 0, 255)
+    hmap_labels = label(hmap)
+    detections_img = draw_boxes(np.copy(img), hmap_labels)
 
-    return [windows_img, heatmap]
+    return [windows_img, hmap, detections_img]
 
 ###################################################################################################
 ## Process test images
@@ -264,12 +283,22 @@ def pipeline(img, scaler, classifier, heatmap):
 test_images = glob.glob('test_images/*.jpg')
 for test_image in test_images:
     image = mpimg.imread(test_image)
-    heatmap = np.zeros_like(image[:,:,0]).astype(np.float)
-    result = pipeline(image, X_scaler, svc, heatmap)
+    result = pipeline(image)
     fig = plt.figure()
-    plt.subplot(121)
+    plt.subplot(131)
     plt.imshow(result[0])
-    plt.subplot(122)
+    plt.subplot(132)
     plt.imshow(result[1], cmap='hot')
+    plt.subplot(133)
+    plt.imshow(result[2])
     fig.tight_layout()
     plt.show()
+
+###################################################################################################
+## Process video
+###################################################################################################
+
+clip_output_filename = 'project_video_detection.mp4'
+clip_input = VideoFileClip('project_video.mp4')
+clip_output = clip_input.fl_image(pipeline)
+clip_output.write_videofile(clip_output_filename, audio=False)
