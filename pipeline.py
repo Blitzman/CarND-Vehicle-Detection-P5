@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 
+import pickle
+
 from skimage.feature import hog
 
 from sklearn.svm import LinearSVC
@@ -21,28 +23,8 @@ from scipy.ndimage.measurements import label
 ## Load data for cars and not cars
 ###################################################################################################
 
-cars_dirs = [
-        'data/vehicles/GTI_Far',
-        'data/vehicles/GTI_Left',
-        'data/vehicles/GTI_MiddleClose',
-        'data/vehicles/GTI_Right',
-        'data/vehicles/KITTI_Extracted']
-not_cars_dirs = [
-        'data/non-vehicles/Extras',
-        'data/non-vehicles/GTI']
-
-cars = []
-not_cars = []
-
-for car_dir in cars_dirs:
-    print('Loading directory ' + car_dir)
-    images = glob.glob(car_dir + '/*.png')
-    cars.extend(images)
-
-for not_car_dir in not_cars_dirs:
-    print('Loading directory ' + not_car_dir)
-    images = glob.glob(not_car_dir + '/*.png')
-    not_cars.extend(images)
+cars = glob.glob('data/vehicles/**/*.png', recursive=True)
+not_cars = glob.glob('data/non-vehicles/**/*.png', recursive=True)
 
 print(str(len(cars)) + ' car images...')
 print(str(len(not_cars)) + ' not car images...')
@@ -69,7 +51,7 @@ def extract_hog_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_ch
 
     features = None
 
-    if hog_channel == 'ALL':
+    if hog_channel == "ALL":
 
         features = []
 
@@ -110,7 +92,7 @@ def extract_features(img,
         features.append(histogram_features)
 
     if enable_hog_features == True:
-        hog_img = cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
+        hog_img = cv2.cvtColor(img, cv2.COLOR_RGB2YCrCb)
         hog_features = extract_hog_features(hog_img, orient, pix_per_cell, cell_per_block, hog_channel)
         features.append(hog_features)
 
@@ -119,55 +101,69 @@ def extract_features(img,
 
 enable_spatial_features = False
 spatial_size = (16, 16)
-enable_histogram_features = True
+enable_histogram_features = False
 hist_bins = 16
 bins_range = (0, 256)
 enable_hog_features = True
 orient = 8
 pix_per_cell = 8
-cell_per_block = 2
-hog_channel = 0
+cell_per_block = 1
+hog_channel = "ALL"
 
-for car in cars:
-    img = cv2.imread(car)
-    features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
-    car_features.append(features)
+train = False
+svc = None
+X_scaler = None
 
-for not_car in not_cars:
-    img = cv2.imread(not_car)
-    features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
-    not_car_features.append(features)
+if train == True:
+
+    for car in cars:
+        img = cv2.imread(car)
+        features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
+        car_features.append(features)
+
+    for not_car in not_cars:
+        img = cv2.imread(not_car)
+        features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
+        not_car_features.append(features)
 
 ###################################################################################################
 ## Prepare data for training
 ###################################################################################################
 
-X = np.vstack((car_features, not_car_features)).astype(np.float64)
-print(X.shape)
-X_scaler = StandardScaler().fit(X)
-scaled_X = X_scaler.transform(X)
+    X = np.vstack((car_features, not_car_features)).astype(np.float64)
+    print(X.shape)
+    X_scaler = StandardScaler().fit(X)
+    scaled_X = X_scaler.transform(X)
 
-y = np.hstack((
-        np.ones(len(car_features)),
-        np.zeros(len(not_car_features))))
+    y = np.hstack((
+            np.ones(len(car_features)),
+            np.zeros(len(not_car_features))))
 
-random_state = np.random.randint(0, 100)
-test_size = 0.2
-X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size=0.2, random_state=random_state)
+    random_state = np.random.randint(0, 100)
+    test_size = 0.2
+    X_train, X_test, y_train, y_test = train_test_split(scaled_X, y, test_size=0.2, random_state=random_state)
 
 ###################################################################################################
 ##  Train SVM
 ###################################################################################################
 
-svc = LinearSVC()
+    svc = LinearSVC()
 
-t1 = time.time()
-svc.fit(X_train, y_train)
-t2 = time.time()
-print(round(t2-t1, 2), ' seconds to train SVC...')
+    t1 = time.time()
+    svc.fit(X_train, y_train)
+    t2 = time.time()
+    print(round(t2-t1, 2), ' seconds to train SVC...')
 
-print('Train accuracy of SVC = ', round(svc.score(X_train, y_train), 4))
-print('Test accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+    print('Train accuracy of SVC = ', round(svc.score(X_train, y_train), 4))
+    print('Test accuracy of SVC = ', round(svc.score(X_test, y_test), 4))
+
+    pickle.dump(svc, open("svc.p", "wb"))
+    pickle.dump(X_scaler, open("x_scaler.p", "wb"))
+
+else:
+
+    svc = pickle.load(open("svc.p", "rb"))
+    X_scaler = pickle.load(open("x_scaler.p", "rb"))
 
 ###################################################################################################
 ## Sliding windows
@@ -223,11 +219,12 @@ def draw_windows(img, windows, color, thickness):
 
 def add_heat(heatmap, windows):
     for window in windows:
-        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += 1
+        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += 4
+        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] *= 2
     return heatmap
 
-def decay_heat(heatmap):
-    heatmap -= 1
+def decay_heat(heatmap, decay):
+    heatmap *= decay
     return heatmap
 
 def threshold_heatmap(heatmap, threshold):
@@ -249,9 +246,11 @@ def draw_boxes(img, labels):
 
 scaler = X_scaler
 classifier = svc
+last_hmap = None
 
-def pipeline(img):
+def pipeline(img, video=True):
     
+
     x_start_stops = [(0, 1280), (0, 1280), (0, 1280), (0, 1280), (0, 1280)]
     y_start_stops = [(400, 656), (400, 656), (400, 656), (400, 656), (400, 656)]
     scales = [(48, 48), (64, 64), (96, 96), (128, 128), (192, 192)]
@@ -276,25 +275,39 @@ def pipeline(img):
             detected_windows.append(window)
 
     windows_img = np.copy(img)
-    windows_img = draw_windows(windows_img, windows, color = (0, 0, 255), thickness = 6)
+    #windows_img = draw_windows(windows_img, windows, color = (0, 0, 255), thickness = 6)
 
-    detections_img = np.copy(img)
-    detections_img = draw_windows(detections_img, detected_windows, color = (0, 0, 255), thickness = 8)
+    detections_img = np.copy(windows_img)
+    detections_img = draw_windows(detections_img, detected_windows, color = (0, 255, 0), thickness = 8)
 
-    hmap = np.zeros_like(img[:,:,0])
+    global last_hmap
+
+    if last_hmap == None:
+        hmap = np.zeros_like(img[:,:,0]).astype(np.float)
+    else:
+        hmap = last_hmap
+
+    hmap = decay_heat(hmap, 0.5)
+
     hmap = add_heat(hmap, detected_windows)
-    hmap = threshold_heatmap(hmap, 1)
     hmap = np.clip(hmap, 0, 255)
-    hmap_labels = label(hmap)
+    last_hmap = hmap
+
+    hmap_threshold = threshold_heatmap(hmap, 32)
+    hmap_labels = label(hmap_threshold)
     refined_img = draw_boxes(np.copy(img), hmap_labels)
 
-    return [windows_img, detections_img, hmap, refined_img]
+    hmap_rgb = np.uint8(np.dstack((hmap, hmap, hmap)))
+    result = cv2.addWeighted(refined_img, 1.0, hmap_rgb, 0.8, 0.5)
+
+    return result
 
 ###################################################################################################
 ## Process test images
 ###################################################################################################
 
 test_images = glob.glob('test_images/*.jpg')
+test_images = []
 for test_image in test_images:
     image = mpimg.imread(test_image)
     result = pipeline(image)
@@ -315,6 +328,6 @@ for test_image in test_images:
 ###################################################################################################
 
 clip_output_filename = 'project_video_detection.mp4'
-clip_input = VideoFileClip('project_video.mp4')
+clip_input = VideoFileClip('project_video.mp4').subclip(10, 20)
 clip_output = clip_input.fl_image(pipeline)
 clip_output.write_videofile(clip_output_filename, audio=False)
