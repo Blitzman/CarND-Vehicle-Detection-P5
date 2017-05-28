@@ -70,3 +70,7 @@ The functions for heat addition, decay, and thresholding can be found in lines 2
 ### Discussion
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project. Where will your pipeline likely fail? What could you do to make it more robust?
+
+* Although the propagation of the heatmap helps making the detections somewhat consistent, the bounding boxes are not really stable. One possible improvement could be to not only propagate the heatmap but also average the bounding boxes through various frames.
+* For the algorithm, it is impossible to distinguish when two or more cars are overlapping, detecting them as a single blob in the heatmap. This could be improved by keeping track of each car's bounding box an trying to force a separation in the bounding boxes when to cars are close.
+* The pipeline is extremely inefficient, mainly due to the high amount of window candidates that must be checked for each frame. A better strategy for producing candidates could be devised, maybe trading accuracy for faster execution.
