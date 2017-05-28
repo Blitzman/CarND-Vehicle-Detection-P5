@@ -47,21 +47,6 @@ def color_histogram(img, nbins=32, bins_range=(0, 256)):
     features = np.concatenate((channel1_hist[0], channel2_hist[0], channel3_hist[0]))
     return features
 
-def extract_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
-    hog_features = None
-
-    if hog_channel == 'ALL':
-        hog_features = []
-        for channel in range(img.shape[2]):
-            hog_features = hog(img[:,:,channel], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell), cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, visualise=False, feature_vector=True)
-            hog_features = np.ravel(hog_features)        
-    else:
-        hog_features = hog(img[:,:,hog_channel], orientations=orient, pixels_per_cell=(pix_per_cell, pix_per_cell), cells_per_block=(cell_per_block, cell_per_block), transform_sqrt=True, visualise=False, feature_vector=True)
-
-    feature = hog_features
-
-    return features
-
 def extract_hog_features(img, orient=9, pix_per_cell=8, cell_per_block=2, hog_channel=0):
 
     features = None
@@ -97,7 +82,7 @@ def extract_features(img,
     features = []
 
     if enable_spatial_features == True:
-        spatial_img = cv2.cvtColor(img, cv2.COLOR_RGB2YUV)
+        spatial_img = cv2.cvtColor(img, cv2.COLOR_RGB2LUV)
         spatial_features = bin_spatial(spatial_img, spatial_size)
         features.append(spatial_features)
 
@@ -114,15 +99,15 @@ def extract_features(img,
     features = np.concatenate(features)
     return features
 
-enable_spatial_features = False
-spatial_size = (16, 16)
-enable_histogram_features = False
+enable_spatial_features = True
+spatial_size = (64, 64)
+enable_histogram_features = True
 hist_bins = 16
 bins_range = (0, 256)
 enable_hog_features = True
-orient = 8
-pix_per_cell = 8
-cell_per_block = 1
+orient = 11
+pix_per_cell = 16
+cell_per_block = 2
 hog_channel = "ALL"
 
 train = False
@@ -264,16 +249,21 @@ classifier = svc
 last_hmap = None
 
 def pipeline(img, video=True):
-    
+
+    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
     x_start_stops = [(0, 1280), (0, 1280), (0, 1280), (0, 1280), (0, 1280)]
     y_start_stops = [(400, 656), (400, 656), (400, 656), (400, 656), (400, 656)]
     scales = [(48, 48), (64, 64), (96, 96), (128, 128), (192, 192)]
-    overlaps = [(0.25, 0.25), (0.25, 0.25), (0.5, 0.5), (0.85, 0.85), (0.85, 0.85)]
+    overlaps = [(0.5, 0.5), (0.6, 0.6), (0.7, 0.7), (0.8, 0.8), (0.9, 0.9)]
 
     windows = []
     for scale, overlap, x_start_stop, y_start_stop in zip(scales, overlaps, x_start_stops, y_start_stops):
         scaled_windows = slide_window(img, x_start_stop, y_start_stop, scale, overlap)
+        #windows_img_test = np.copy(img)
+        #windows_img_test = draw_windows(windows_img_test, scaled_windows, color = (0, 0, 255), thickness=4)
+        #plt.imshow(windows_img_test)
+        #plt.show()
         windows.extend(scaled_windows)
 
     detected_windows = []
@@ -302,20 +292,20 @@ def pipeline(img, video=True):
     else:
         hmap = last_hmap
 
-    hmap = decay_heat(hmap, 0.5)
+    hmap = decay_heat(hmap, 0.1)
 
     hmap = add_heat(hmap, detected_windows)
     hmap = np.clip(hmap, 0, 255)
     last_hmap = hmap
 
-    hmap_threshold = threshold_heatmap(hmap, 32)
+    hmap_threshold = threshold_heatmap(hmap, 28)
     hmap_labels = label(hmap_threshold)
     refined_img = draw_boxes(np.copy(img), hmap_labels)
 
     hmap_rgb = np.uint8(np.dstack((hmap, hmap, hmap)))
     result = cv2.addWeighted(refined_img, 1.0, hmap_rgb, 0.8, 0.5)
 
-    return result
+    return cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
 
 ###################################################################################################
 ## Process test images
@@ -324,17 +314,22 @@ def pipeline(img, video=True):
 test_images = glob.glob('test_images/*.jpg')
 test_images = []
 for test_image in test_images:
-    image = mpimg.imread(test_image)
+    image = cv2.imread(test_image)
+    last_hmap = None
     result = pipeline(image)
     fig = plt.figure()
-    plt.subplot(141)
-    plt.imshow(result[0])
-    plt.subplot(142)
-    plt.imshow(result[1])
-    plt.subplot(143)
+    ax = plt.subplot(141)
+    ax.set_title("Original Image")
+    plt.imshow(cv2.cvtColor(result[0], cv2.COLOR_BGR2RGB))
+    ax = plt.subplot(142)
+    ax.set_title("Detections")
+    plt.imshow(cv2.cvtColor(result[1], cv2.COLOR_BGR2RGB))
+    ax = plt.subplot(143)
+    ax.set_title("Heatmap")
     plt.imshow(result[2], cmap='hot')
-    plt.subplot(144)
-    plt.imshow(result[3])
+    ax = plt.subplot(144)
+    ax.set_title("Labeled Detections")
+    plt.imshow(cv2.cvtColor(result[3], cv2.COLOR_BGR2RGB))
     fig.tight_layout()
     plt.show()
 
@@ -343,6 +338,6 @@ for test_image in test_images:
 ###################################################################################################
 
 clip_output_filename = 'project_video_detection.mp4'
-clip_input = VideoFileClip('project_video.mp4').subclip(10, 20)
+clip_input = VideoFileClip('project_video.mp4')
 clip_output = clip_input.fl_image(pipeline)
 clip_output.write_videofile(clip_output_filename, audio=False)
