@@ -59,6 +59,14 @@ The main feature introduced for classifier performance boosting, in terms of run
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
+In order to filter false positives and combine overlapping bounding boxes, we implemented video-based heatmap procedure. For the first frame, we build an empty heatmap and use the detected windows to "add heat" by adding a constant `heat_addition` to each pixel where a car was detected, then that value is multiplied by a `heat_multiplier` constant. By doing this we greatly boost those areas in which we already had a detection or heat.
+
+After that, we threshold the heatmap to keep those areas in which a certain `heat_threshold` is met. That thresholded heatmap is passed to the `label` function to generate the final bounding boxes for the detections.
+
+When the next frame is processed, we start with the previous heatmap and apply a decay constant `heat_decay` to it by multiplying each pixel by that constant. This decay will basically null each pixel in which a detection is not consistent through multiple frames. Then the heat addition and thresholding is repeated.
+
+The functions for heat addition, decay, and thresholding can be found in lines 221 to 233. Those functions are used in the pipeline loop (lines 284 to 298) in `pipeline.py`.
+
 ### Discussion
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project. Where will your pipeline likely fail? What could you do to make it more robust?
