@@ -29,6 +29,8 @@ The goals / steps of this project are the following:
 
 #### 1. Explain how (and identify where in your code) you extracted HOG features from the training images. Explain how you settled on your final choice of HOG parameters.
 
+The feature vectors are composed of three parts: spatial features, histogram features, and HOG features. We empirically determined that the best combination was the following one: (64, 64) spatially binned features using LUV color space, 16 bins histogram features in range (0, 256) with HSV color space, and HOG features with 11 orientations, 16 pixels per cell, 2 cells per block and all channels of the YCrCb color space.
+
 #### 2. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
 Training happens between lines 113 and 166 in `pipeline.py`. This process can be divided into four steps: feature extraction, data preparation and normalization, SVM training, and model loading/saving.
@@ -92,6 +94,12 @@ The main feature introduced for classifier performance boosting, in terms of run
 ### Video Implementation
 
 #### 1. Provide a link to your final video output. Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
+
+The following video shows the final output of the pipeline (click to play).
+
+[![ProjectVideo](http://img.youtube.com/vi/O8PEZFAIgXc/0.jpg)](https://www.youtube.com/watch?v=O8PEZFAIgXc "Self-Driving Car Nanodegree - P5: Vehicle Detection")
+
+The video can be found [here](./project_video_detection.mp4).
 
 #### 2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
 
