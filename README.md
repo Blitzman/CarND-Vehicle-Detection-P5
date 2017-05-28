@@ -31,9 +31,11 @@ The goals / steps of this project are the following:
 
 The feature vectors are composed of three parts: spatial features, histogram features, and HOG features. We empirically determined that the best combination was the following one: (64, 64) spatially binned features using LUV color space, 16 bins histogram features in range (0, 256) with HSV color space, and HOG features with 11 orientations, 16 pixels per cell, 2 cells per block and all channels of the YCrCb color space.
 
+The function for extracting the spatial features is called `bin_spatial` (lines 39-41), the one for extracting color histograms is `color_histogram` (lines 43-48), and the one for HOG features is called `extract_hog_features` (lines 50-75). The whole feature extraction process is combined into `extract_features` (lines 77-100). Parameters are set through lines 102-111.
+
 #### 2. Describe how (and identify where in your code) you trained a classifier using your selected HOG features (and color features if you used them).
 
-Training happens between lines 113 and 166 in `pipeline.py`. This process can be divided into four steps: feature extraction, data preparation and normalization, SVM training, and model loading/saving.
+Training happens between lines 113 and 168 in `pipeline.py`. This process can be divided into four steps: feature extraction, data preparation and normalization, SVM training, and model loading/saving.
 
 First, we load all car and non-car images and extract the aforementioned features for each one of them. We load a total of 8792 car images and 8968 non-car ones so the dataset is pretty well balanced. Those images are provided by Udacity for this project. Here are some examples of those images:
 
