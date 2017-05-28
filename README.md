@@ -12,6 +12,19 @@ The goals / steps of this project are the following:
 * Run your pipeline on a video stream (start with the test_video.mp4 and later implement on full project_video.mp4) and create a heat map of recurring detections frame by frame to reject outliers and follow detected vehicles.
 * Estimate a bounding box for vehicles detected.
 
+[dataset]: ./img/dataset.png
+[windows1]: ./img/windows1.png
+[windows2]: ./img/windows2.png
+[windows3]: ./img/windows3.png
+[windows4]: ./img/windows4.png
+[windows5]: ./img/windows5.png
+[test1]: ./img/test1.png
+[test2]: ./img/test2.png
+[test3]: ./img/test3.png
+[test4]: ./img/test4.png
+[test5]: ./img/test5.png
+[test6]: ./img/test6.png
+
 ### Histogram of Oriented Gradients (HOG)
 
 #### 1. Explain how (and identify where in your code) you extracted HOG features from the training images. Explain how you settled on your final choice of HOG parameters.
@@ -22,7 +35,7 @@ Training happens between lines 113 and 166 in `pipeline.py`. This process can be
 
 First, we load all car and non-car images and extract the aforementioned features for each one of them. We load a total of 8792 car images and 8968 non-car ones so the dataset is pretty well balanced. Those images are provided by Udacity for this project. Here are some examples of those images:
 
-#TODO
+![dataset][dataset]
 
 Next step is data preparation. In this part we stack the features from car and non-car images for training, then a `StandardScaler` is used to normalize and scale those features. Labels are also generated and the function `train_test_split` is used to create training and testing splits.
 
@@ -39,9 +52,27 @@ The sliding window search process is codified into different parts of the progra
 
 The function `slide_window` is the candidate generation method. It takes an image, starting position for the X and Y axes, the window size, and the overlap amount. This function can be found in lines 172 through 208.
 
-The `pipeline` function, which codifies the frame-by-frame vehicle detection process, makes use of that function in lines 259 to 262 to generate possible candidates. We use five different scales or window sizes: 48, 64, 96, 128, and 192 pixels with increasing overlaps 0.25, 0.25, 0.5, 0.85, and 0.85 respectively. Starting and ending points are set to avoid parts of the image in which no car will appear at all. This parameter setup decision was completely empirical. The candidate generation process produces the following result.
+The `pipeline` function, which codifies the frame-by-frame vehicle detection process, makes use of that function in lines 259 to 262 to generate possible candidates. We use five different scales or window sizes: 48, 64, 96, 128, and 192 pixels with increasing overlaps 0.5, 0.6, 0.7, 0.8, and 0.9 respectively. Starting and ending points are set to avoid parts of the image in which no car will appear at all. This parameter setup decision was completely empirical. The candidate generation process produces the following result.
 
-#TODO
+(48, 48) windows:
+
+![windows1][windows1]
+
+(64, 64) windows:
+
+![windows2][windows2]
+
+(96, 96) windows:
+
+![windows3][windows3]
+
+(128, 128) windows:
+
+![windows4][windows4]
+
+(192, 192) windows:
+
+![windows5][windows5]
 
 Next, those windows are processed one by one in the main loop of the pipeline (lines 266 to 275). Each window is resized to `64x64` pixels and features are extracted for them using the aforementioned method. Then the trained SVM is used to predict whether or not they are cars. Detected windows are kept for subsequent steps.
 
@@ -49,7 +80,12 @@ Next, those windows are processed one by one in the main loop of the pipeline (l
 
 Our pipeline is mainly purposed for video processing since, as we will explain later, it relies on heat map averaging through frames to confidently detect cars. However, here we show the resulting test images disabling that video heat map averaging:
 
-#TODO
+![test1][test1]
+![test2][test2]
+![test3][test3]
+![test4][test4]
+![test5][test5]
+![test6][test6]
 
 The main feature introduced for classifier performance boosting, in terms of runtime, is the selection of proper window candidates that span only regions of the image where cars are expected to be, as well as a well defined set of scales to offer a good trade-off between detection and speed.
 
