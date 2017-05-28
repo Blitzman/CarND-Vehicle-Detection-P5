@@ -126,6 +126,8 @@ if train == True:
         features = extract_features(img, enable_spatial_features, spatial_size, enable_histogram_features, hist_bins, bins_range, enable_hog_features, orient, pix_per_cell, cell_per_block, hog_channel)
         not_car_features.append(features)
 
+    print("Feature vector is " + str(car_features[0].shape))
+
 ###################################################################################################
 ## Prepare data for training
 ###################################################################################################
@@ -217,18 +219,18 @@ def draw_windows(img, windows, color, thickness):
 ## Heatmap
 ###################################################################################################
 
-def add_heat(heatmap, windows):
+def add_heat(heatmap, windows, heat_addition, heat_multiplier):
     for window in windows:
-        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += 4
-        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] *= 2
+        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] += heat_addition
+        heatmap[window[0][1]:window[1][1], window[0][0]:window[1][0]] *= heat_multiplier
     return heatmap
 
-def decay_heat(heatmap, decay):
-    heatmap *= decay
+def decay_heat(heatmap, heat_decay):
+    heatmap *= heat_decay
     return heatmap
 
-def threshold_heatmap(heatmap, threshold):
-    heatmap[heatmap <= threshold] = 0
+def threshold_heatmap(heatmap, heat_threshold):
+    heatmap[heatmap <= heat_threshold] = 0
     return heatmap
 
 def draw_boxes(img, labels):
@@ -250,7 +252,8 @@ last_hmap = None
 
 def pipeline(img, video=True):
 
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    if video == True:
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
 
     x_start_stops = [(0, 1280), (0, 1280), (0, 1280), (0, 1280), (0, 1280)]
     y_start_stops = [(400, 656), (400, 656), (400, 656), (400, 656), (400, 656)]
@@ -260,10 +263,6 @@ def pipeline(img, video=True):
     windows = []
     for scale, overlap, x_start_stop, y_start_stop in zip(scales, overlaps, x_start_stops, y_start_stops):
         scaled_windows = slide_window(img, x_start_stop, y_start_stop, scale, overlap)
-        #windows_img_test = np.copy(img)
-        #windows_img_test = draw_windows(windows_img_test, scaled_windows, color = (0, 0, 255), thickness=4)
-        #plt.imshow(windows_img_test)
-        #plt.show()
         windows.extend(scaled_windows)
 
     detected_windows = []
@@ -279,10 +278,7 @@ def pipeline(img, video=True):
         if prediction == 1:
             detected_windows.append(window)
 
-    windows_img = np.copy(img)
-    #windows_img = draw_windows(windows_img, windows, color = (0, 0, 255), thickness = 6)
-
-    detections_img = np.copy(windows_img)
+    detections_img = np.copy(img)
     detections_img = draw_windows(detections_img, detected_windows, color = (0, 255, 0), thickness = 8)
 
     global last_hmap
@@ -294,7 +290,7 @@ def pipeline(img, video=True):
 
     hmap = decay_heat(hmap, 0.1)
 
-    hmap = add_heat(hmap, detected_windows)
+    hmap = add_heat(hmap, detected_windows, 4, 2)
     hmap = np.clip(hmap, 0, 255)
     last_hmap = hmap
 
@@ -305,18 +301,20 @@ def pipeline(img, video=True):
     hmap_rgb = np.uint8(np.dstack((hmap, hmap, hmap)))
     result = cv2.addWeighted(refined_img, 1.0, hmap_rgb, 0.8, 0.5)
 
-    return cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+    if video == True:
+        return cv2.cvtColor(result, cv2.COLOR_BGR2RGB)
+    else:
+        return img, detections_img, hmap, result
 
 ###################################################################################################
 ## Process test images
 ###################################################################################################
 
 test_images = glob.glob('test_images/*.jpg')
-test_images = []
 for test_image in test_images:
     image = cv2.imread(test_image)
     last_hmap = None
-    result = pipeline(image)
+    result = pipeline(image, False)
     fig = plt.figure()
     ax = plt.subplot(141)
     ax.set_title("Original Image")
